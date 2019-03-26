@@ -2,7 +2,7 @@
 * Yet Another DataTables Column Filter - (yadcf)
 *
 * File:        jquery.dataTables.yadcf.js
-* Version:     0.9.3
+* Version:     0.9.4.beta.22
 *
 * Author:      Daniel Reznick
 * Info:        https://github.com/vedmack/yadcf
@@ -79,7 +79,13 @@
 * text_data_delimiter
                 Required:           false
                 Type:               String
-                Description:        Delimiter that seperates text in table column, for example text_data_delimiter: ","
+				Description:        Delimiter that seperates text in table column, for example text_data_delimiter: ","
+
+* custom_range_delimiter:
+                Required:           false
+				Type:               String
+				Default value:      '-yadcf_delim-'
+                Description:        Delimiter that seperates min and max values for number range filter type, for example custom_range_delimiter: 'minMax'
 
 * html_data_type
                 Required:           false
@@ -175,7 +181,7 @@
                 Type:               String
                 Default value:      undefined
                 Possible values:    Any format accepted by momentjs
-                Description:        Defines the format in which the date values are being parsed into Date object by momentjs library
+                Description:        Defines the format in which the table date values are being parsed into Date object by momentjs library
                 Note:               Currently relevant only when using datepicker_type: 'bootstrap-datetimepicker')
 
 * ignore_char
@@ -202,7 +208,27 @@
                 Required:           false
                 Type:               String
                 Default value:      'exclude'
-                Description:        The label that will appear above the exclude checkbox
+				Description:        The label that will appear above the exclude checkbox
+
+* regex_check_box
+                Required:           false
+                Type:               boolean
+                Default value:      undefined
+                Description:        Adds a checkbox next to the filter that allows to switch to regex filter_match_mode filtering on a fly
+				Note:               Currently available for the text filter
+
+* regex_label
+                Required:           false
+                Type:               String
+                Default value:      'regex'
+				Description:        The label that will appear above the regex checkbox
+
+* checkbox_position_after
+                Required:           false
+                Type:               boolean
+                Default value:      false
+                Description:        Adds checkboxes exclude and regex after input text column
+				Note:               Currently available for the text filter
 
 * select_type
                 Required:           false
@@ -243,7 +269,7 @@
                 Required:           false
                 Type:               String
                 Default value:      'jquery-ui'
-                Possible values:    'jquery-ui' / 'bootstrap-datetimepicker' / bootstrap-datepicker
+                Possible values:    'jquery-ui' / 'bootstrap-datetimepicker' / bootstrap-datepicker / daterangepicker / dt-datetime (DataTable Editor DateTime picker)
                 Description:        You can choose datapicker library from defined in special notes
                 Special notes:      Currently supported only jQueryUI datepicker (datepicker) and Bootstrap datepicker (eonasdan-bootstrap-datetimepicker)
                                     Bootstrap datepicker depends moment library. This plugin depends moment too.
@@ -305,6 +331,16 @@
                 Description:        Calls the provided callback function in the end of the yadcf init function
 				Note:               This callback function will run before datatables fires its event such as draw/xhr/etc., migth be usefull for call some
 									third parties init / loading code
+* jquery_ui_datepicker_locale
+                Required:           false
+                Type:               string
+                Default value:      ""
+                Description:        Load localized jquery-ui datepicker
+		Note:               Need to load jquery-ui-i18n lib.
+		Possible values:    af, ar-DZ, ar, az, be, bg, bs, ca, cs, cy-GB, da, de, el, en-AU, en-GB, en-NZ, eo, es, et, eu, fa, fi, fo, fr-CA, fr-CH,
+				    fr, gl, he, hi, hr, hu, hy, id, is, it-CH, it, ja, ka, kk, km, ko, ky, lb, lt, lv, mk, ml, ms, nb, nl-BE, nl, nn, no, pl,
+				    pt-BR, pt, rm, ro, ru, sk, sl, sq, sr-SR, sr, sv, ta, th, tj, tr, uk, vi, zh-CN, zh-HK, zh-TW
+
 *
 *
 *
@@ -485,7 +521,8 @@ if (!Object.entries) {
 				date: 'Select a date'
 			},
 			settingsMap = {};
-			
+
+		let ctrlPressed = false;
 		let closeBootstrapDatepicker = false;
 		let	closeBootstrapDatepickerRange = false;
 		let	closeSelect2 = false;
@@ -600,7 +637,7 @@ if (!Object.entries) {
 			return tmpObj;
 		}
 
-		function setOptions(selector_arg, options_arg, params) {
+		function setOptions(selector_arg, options_arg, params, table) {
 			var tmpOptions = {},
 				i,
 				col_num_as_int,
@@ -618,12 +655,15 @@ if (!Object.entries) {
 					column_data_type: 'text',
 					html_data_type: 'text',
 					exclude_label: 'exclude',
+					regex_label: 'regex',
+					checkbox_position_after: false,
 					style_class: '',
 					reset_button_style_class: '',
 					datepicker_type: 'jquery-ui',
 					range_data_type: 'single',
 					range_data_type_delim: '-',
-					omit_default_label: false
+					omit_default_label: false,
+					custom_range_delimiter: '-yadcf_delim-'
 				};
 				//adaptContainerCssClassImpl = function (dummy) { return ''; };
 
@@ -653,15 +693,27 @@ if (!Object.entries) {
 						return;
 					}
 				}
-				col_num_as_int = +options_arg[i].column_number;
-				if (isNaN(col_num_as_int)) {
-					tmpOptions[options_arg[i].column_number_str] = $.extend(true, {}, default_options, options_arg[i]);
+				if (!options_arg[i].column_selector) {
+					col_num_as_int = +options_arg[i].column_number;
+					if (isNaN(col_num_as_int)) {
+						tmpOptions[options_arg[i].column_number_str] = $.extend(true, {}, default_options, options_arg[i]);
+					} else {
+						tmpOptions[col_num_as_int] = $.extend(true, {}, default_options, options_arg[i]);
+					}
 				} else {
-					tmpOptions[col_num_as_int] = $.extend(true, {}, default_options, options_arg[i]);
+					if (table && table.column) {
+						//translate from column_selector to column_number
+						let columnNumber = table.column(options_arg[i].column_selector);
+						if (columnNumber.index() >= 0) {
+							options_arg[i].column_number = columnNumber.index();
+							tmpOptions[options_arg[i].column_number] = $.extend(true, {}, default_options, options_arg[i]);
+						}
+					}
 				}
 			}
+
 			options[selector_arg] = tmpOptions;
-			
+
 			check3rdPPluginsNeededClose();
 		}
 
@@ -672,7 +724,7 @@ if (!Object.entries) {
 						if (columnEntry[1].filter_type === 'range_date') {
 							closeBootstrapDatepickerRange = true;
 						} else {
-							closeBootstrapDatepicker = true;	
+							closeBootstrapDatepicker = true;
 						}
 					} else if (columnEntry[1].select_type === 'select2') {
 						closeSelect2 = true;
@@ -680,7 +732,7 @@ if (!Object.entries) {
 				});
 			});
 		}
-		
+
 		//taken and modified from DataTables 1.10.0-beta.2 source
 		function yadcfVersionCheck(version) {
 			var aThis = $.fn.dataTable.ext.sVersion.split('.'),
@@ -890,6 +942,11 @@ if (!Object.entries) {
 					oTable.fnFilter(selected_value, column_number, true, false, true, case_insensitive);
 				}
 			} else {
+				if (filter_match_mode === "exact") {
+					selected_value = "^" + escapeRegExp(selected_value) + "$";
+				} else if (filter_match_mode === "startsWith") {
+					selected_value = "^" + escapeRegExp(selected_value);
+				}
 				oTable.fnFilter("^((?!" + selected_value + ").)*$", column_number, true, false, true, case_insensitive);
 			}
 		}
@@ -1127,7 +1184,7 @@ if (!Object.entries) {
 		}
 
 		function findMinInArray(array, columnObj) {
-			var narray = [], 
+			var narray = [],
 				i,
 				num,
 				min;
@@ -1157,7 +1214,7 @@ if (!Object.entries) {
 					min = -1 * Math.ceil(min * -1);
 				}
 			}
-			
+
 			return min;
 		}
 
@@ -1224,7 +1281,24 @@ if (!Object.entries) {
 					column_number_filter = calcColumnNumberFilter(settingsDt, col_num, table_selector_jq_friendly);
 
 					if (rowData !== undefined) {
-						aData = rowData;
+						let rowDataRender;
+						if (columnObj.column_number_render) {
+							rowDataRender = $.extend(true, [], rowData);
+							const index = columnObj.column_number_data ? columnObj.column_number_data : column_number_filter;
+							const meta = {
+													row: iDataIndex,
+													col: columnObj.column_number,
+													settings: settingsDt
+							};
+							if (typeof index === 'string' &&  typeof rowDataRender === 'object') {
+								const cellDataRender = columnObj.column_number_render(getProp(rowDataRender, index), 'filter', rowData, meta);
+								setProp(rowDataRender, index, (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : getProp(rowData, index));
+							}	else {
+								const cellDataRender = columnObj.column_number_render(rowDataRender[index], 'filter', rowData, meta);
+								rowDataRender[index] = (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : rowData[index];
+							}
+						}
+						aData = rowDataRender ? rowDataRender : rowData;
 						if (columnObj.column_number_data !== undefined) {
 							column_number_filter = columnObj.column_number_data;
 							val = dot2obj(aData, column_number_filter);
@@ -1368,11 +1442,20 @@ if (!Object.entries) {
 						max_time,
 						dataRenderFunc,
 						dpg;
-
+					//"2019/01/30 - 2019/01/30"
 					if (table_selector_jq_friendly_local !== current_table_selector_jq_friendly) {
 						return true;
 					}
 					columnObj = getOptions(settingsDt.oInstance.selector)[col_num];
+					if (columnObj.filters_position === 'tfoot' && settingsDt.oScroll.sX) {
+						let selectorePrefix = '.dataTables_scrollFoot ';
+						min = document.querySelector(selectorePrefix + '#' + fromId) ? document.querySelector(selectorePrefix + '#' + fromId).value : '';
+						max = document.querySelector(selectorePrefix + '#' + toId) ? document.querySelector(selectorePrefix + '#' + toId).value : '';
+					}
+					if (columnObj.datepicker_type === 'daterangepicker') {
+						min = $.trim(min.substring(0, min.indexOf('-')));
+						max = $.trim(max.substring(max.indexOf('-') + 1));
+					}
 					if (columnObj.datepicker_type === 'bootstrap-datepicker') {
 						dpg = $.fn.datepicker.DPGlobal;
 					}
@@ -1419,28 +1502,28 @@ if (!Object.entries) {
 							val = val['@' + columnObj.html5_data];
 						}
 					}
-					
+
 					//omit empty rows when filtering
 					if (val === '' && (min !== '' || max !== '')) {
 						return false;
 					}
 					try {
-						if (min.length === (date_format.length + 2) || columnObj.datepicker_type.indexOf('bootstrap') !== -1) {
+						if (min.length === (date_format.length + 2) || columnObj.datepicker_type.indexOf('bootstrap') !== -1 || columnObj.datepicker_type === 'daterangepicker') {
 							if (columnObj.datepicker_type === 'jquery-ui') {
 								min = (min !== "") ? $.datepicker.parseDate(date_format, min) : min;
-							} else if (columnObj.datepicker_type === 'bootstrap-datetimepicker') {
-								min = (min !== "") ? moment(min, columnObj.moment_date_format).toDate() : min;
+							} else if (columnObj.datepicker_type === 'bootstrap-datetimepicker' || columnObj.datepicker_type === 'daterangepicker') {
+								min = (min !== "") ? moment(min, columnObj.date_format).toDate() : min;
 							} else if (columnObj.datepicker_type === 'bootstrap-datepicker') {
 								min = (min !== "") ? dpg.parseDate(min, dpg.parseFormat(columnObj.date_format)) : min;
 							}
 						}
 					} catch (err1) {}
 					try {
-						if (max.length === (date_format.length + 2) || columnObj.datepicker_type.indexOf('bootstrap') !== -1) {
+						if (max.length === (date_format.length + 2) || columnObj.datepicker_type.indexOf('bootstrap') !== -1 || columnObj.datepicker_type === 'daterangepicker') {
 							if (columnObj.datepicker_type === 'jquery-ui') {
 								max = (max !== "") ? $.datepicker.parseDate(date_format, max) : max;
-							} else if (columnObj.datepicker_type === 'bootstrap-datetimepicker') {
-								max = (max !== "") ? moment(max, columnObj.moment_date_format).toDate() : max;
+							} else if (columnObj.datepicker_type === 'bootstrap-datetimepicker' || columnObj.datepicker_type === 'daterangepicker') {
+								max = (max !== "") ? moment(max, columnObj.date_format).toDate() : max;
 							} else if (columnObj.datepicker_type === 'bootstrap-datepicker') {
 								max = (max !== "") ? dpg.parseDate(max, dpg.parseFormat(columnObj.date_format)) : max;
 							}
@@ -1453,6 +1536,8 @@ if (!Object.entries) {
 							val = (val !== "") ? moment(val, columnObj.moment_date_format).toDate() : val;
 						} else if (columnObj.datepicker_type === 'bootstrap-datepicker') {
 							val = (val !== "") ? dpg.parseDate(val, dpg.parseFormat(columnObj.date_format)) : val;
+						} else if (columnObj.datepicker_type === 'daterangepicker') {
+							val = (val !== "") ? moment(val, columnObj.date_format).toDate() : val;
 						}
 					} catch (err3) {}
 
@@ -1567,13 +1652,15 @@ if (!Object.entries) {
 				settingsDt,
 				columnObj;
 
-			if (pDate.type === 'dp') {
-				event = pDate.target;
-			} else if (pDate.type === 'changeDate') {
-				event = pDate.currentTarget;
-			} else {
-				date = pDate;
-				event = pEvent;
+			if (pDate) {
+				if (pDate.type === 'dp') {
+					event = pDate.target;
+				} else if (pDate.type === 'changeDate') {
+					event = pDate.currentTarget;
+				} else {
+					date = pDate;
+					event = pEvent;
+				}
 			}
 
 			column_number = $(event).attr('id').replace('yadcf-filter-', '').replace('-date', '').replace('-reset', '');
@@ -1597,6 +1684,8 @@ if (!Object.entries) {
 				if (pDate.dates) {
 					date = pDate.format(0, columnObj.date_format);
 				}
+			} else if (columnObj.datepicker_type === 'dt-datetime') {
+				console.log('a');
 			}
 
 			column_number_filter = calcColumnNumberFilter(settingsDt, column_number, table_selector_jq_friendly);
@@ -1637,7 +1726,11 @@ if (!Object.entries) {
 						}
 					}
 				}
-				oTable.fnFilter('', column_number_filter);
+				if (columnObj.datepicker_type === 'daterangepicker' && oTable.fnSettings().oFeatures.bServerSide !== true) {
+					rangeClear(table_selector_jq_friendly, event, column_number);
+				} else {
+					oTable.fnFilter('', column_number_filter);
+				}
 				$('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number).val('').removeClass("inuse");
 				if (columnObj.datepicker_type === 'bootstrap-datepicker') {
 					$('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number).datepicker('update');
@@ -1658,9 +1751,10 @@ if (!Object.entries) {
 				event,
 				columnObj,
 				column_number_filter,
-				settingsDt;
+				settingsDt,
+				keyUp;
 
-			if (pDate.type === 'dp') {
+			if (pDate.type === 'dp' || pDate.namespace === 'daterangepicker') {
 				event = pDate.target;
 			} else if (pDate.type === 'changeDate') {
 				event = pDate.currentTarget;
@@ -1701,45 +1795,60 @@ if (!Object.entries) {
 			} else {
 				$(event).addClass("inuse");
 			}
-
-			if ($(event).attr("id").indexOf("-from-") !== -1) {
-				from = document.getElementById($(event).attr("id")).value;
-				to = document.getElementById($(event).attr("id").replace("-from-", "-to-")).value;
+			if (pDate.namespace === 'daterangepicker') {
+				from = moment(pEvent.startDate).format(columnObj.date_format);
+				to = moment(pEvent.endDate).format(columnObj.date_format);
 			} else {
-				to = document.getElementById($(event).attr("id")).value;
-				from = document.getElementById($(event).attr("id").replace("-to-", "-from-")).value;
+				if ($(event).attr("id").indexOf("-from-") !== -1) {
+					from = document.getElementById($(event).attr("id")).value;
+					to = document.getElementById($(event).attr("id").replace("-from-", "-to-")).value;
+				} else {
+					to = document.getElementById($(event).attr("id")).value;
+					from = document.getElementById($(event).attr("id").replace("-to-", "-from-")).value;
+				}
 			}
 
-			if (oTable.fnSettings().oFeatures.bServerSide !== true) {
-				oTable.fnDraw();
-			} else {
-				oTable.fnFilter(from + '-yadcf_delim-' + to, column_number_filter);
-			}
+			keyUp = function () {
+				if (oTable.fnSettings().oFeatures.bServerSide !== true) {
+					oTable.fnDraw();
+				} else {
+					oTable.fnFilter(from + columnObj.custom_range_delimiter + to, column_number_filter);
+				}
 
-			if (!oTable.fnSettings().oLoadedState) {
-				oTable.fnSettings().oLoadedState = {};
-				oTable.fnSettings().oApi._fnSaveState(oTable.fnSettings());
-			}
-			if (oTable.fnSettings().oFeatures.bStateSave === true) {
-				if (oTable.fnSettings().oLoadedState.yadcfState !== undefined && oTable.fnSettings().oLoadedState.yadcfState[table_selector_jq_friendly] !== undefined) {
-					oTable.fnSettings().oLoadedState.yadcfState[table_selector_jq_friendly][column_number] =
-						{
+				if (!oTable.fnSettings().oLoadedState) {
+					oTable.fnSettings().oLoadedState = {};
+					oTable.fnSettings().oApi._fnSaveState(oTable.fnSettings());
+				}
+				if (oTable.fnSettings().oFeatures.bStateSave === true) {
+					if (oTable.fnSettings().oLoadedState.yadcfState !== undefined && oTable.fnSettings().oLoadedState.yadcfState[table_selector_jq_friendly] !== undefined) {
+						oTable.fnSettings().oLoadedState.yadcfState[table_selector_jq_friendly][column_number] =
+							{
+								from: from,
+								to: to
+							};
+					} else {
+						yadcfState = {};
+						yadcfState[table_selector_jq_friendly] = [];
+						yadcfState[table_selector_jq_friendly][column_number] = {
 							from: from,
 							to: to
 						};
-				} else {
-					yadcfState = {};
-					yadcfState[table_selector_jq_friendly] = [];
-					yadcfState[table_selector_jq_friendly][column_number] = {
-						from: from,
-						to: to
-					};
-					oTable.fnSettings().oLoadedState.yadcfState = yadcfState;
+						oTable.fnSettings().oLoadedState.yadcfState = yadcfState;
+					}
+					oTable.fnSettings().oApi._fnSaveState(oTable.fnSettings());
 				}
-				oTable.fnSettings().oApi._fnSaveState(oTable.fnSettings());
+				if (from !== '' || to !== ''){
+					$('#' + event.id).addClass("inuse");
+				}
+				resetIApiIndex();
+			};
+			if (columnObj.filter_delay === undefined) {
+				keyUp();
+			} else {
+				yadcfDelay(function () {
+					keyUp();
+				}, columnObj.filter_delay);
 			}
-
-			resetIApiIndex();
 		}
 
 		function addRangeDateFilter(filter_selector_string, table_selector_jq_friendly, column_number, filter_reset_button_text, filter_default_label, date_format) {
@@ -1807,6 +1916,9 @@ if (!Object.entries) {
 			datepickerObj = $.extend({}, datepickerObj, columnObj.filter_plugin_options);
 
 			if (columnObj.datepicker_type === 'jquery-ui') {
+				if (columnObj.jquery_ui_datepicker_locale) {
+					$.extend(datepickerObj, $.datepicker.regional[columnObj.jquery_ui_datepicker_locale]);
+				}
 				$fromInput.datepicker($.extend(datepickerObj, {onClose: function (selectedDate) {
 					$toInput.datepicker('option', 'minDate', selectedDate);
 				}  }));
@@ -1884,7 +1996,7 @@ if (!Object.entries) {
 				filterActionStr = '';
 			}
 
-			$(filter_selector_string).append("<input onkeydown=\"yadcf.preventDefaultForEnter(event);\" placeholder=\"" + filter_default_label + "\" id=\"" + dateId + "\" class=\"yadcf-filter-date\" " + filterActionStr + "></input>");
+			$(filter_selector_string).append("<input onkeydown=\"yadcf.preventDefaultForEnter(event);\" placeholder=\"" + filter_default_label + "\" id=\"" + dateId + "\" class=\"yadcf-filter-date " + columnObj.style_class + "\" " + filterActionStr + "></input>");
 
 			if (filter_reset_button_text !== false) {
 				$(filter_selector_string_tmp).append('<button type="button" id="' + dateId + '-reset" ' + 'onmousedown="yadcf.stopPropagation(event);" ' +
@@ -1893,8 +2005,11 @@ if (!Object.entries) {
 
 			if (columnObj.datepicker_type === 'jquery-ui') {
 				datepickerObj.dateFormat = date_format;
-			} else if (columnObj.datepicker_type.indexOf('bootstrap') !== -1) {
+			} else if (columnObj.datepicker_type.indexOf('bootstrap') !== -1 || columnObj.datepicker_type === 'dt-datetime') {
 				datepickerObj.format = date_format;
+			} else if (columnObj.datepicker_type === 'daterangepicker') {
+				datepickerObj.locale = {};
+				datepickerObj.locale.format = date_format;
 			}
 
 			if (columnObj.externally_triggered !== true) {
@@ -1906,6 +2021,9 @@ if (!Object.entries) {
 			datepickerObj = $.extend({}, datepickerObj, columnObj.filter_plugin_options);
 
 			if (columnObj.datepicker_type === 'jquery-ui') {
+				if (columnObj.jquery_ui_datepicker_locale) {
+					$.extend(datepickerObj, $.datepicker.regional[columnObj.jquery_ui_datepicker_locale]);
+				}
 				$("#" + dateId).datepicker(datepickerObj);
 			} else if (columnObj.datepicker_type === 'bootstrap-datetimepicker') {
 				datepickerObj.useCurrent = false;
@@ -1921,6 +2039,19 @@ if (!Object.entries) {
 				$("#" + dateId).datepicker(datepickerObj).on('changeDate', function (e) {
 					dateSelectSingle(e);
 					$(this).datepicker('hide');
+				});
+			} else if (columnObj.datepicker_type === 'dt-datetime') {
+				new $.fn.DataTable.Editor.DateTime(
+					$("#" + dateId),
+					{
+					  format: date_format,
+					  onChange: dateSelectSingle
+					}
+				);
+			} else if (columnObj.datepicker_type === 'daterangepicker') {
+				$("#" + dateId).daterangepicker(datepickerObj);
+				$("#" + dateId).on('apply.daterangepicker, hide.daterangepicker', function(ev, picker) {
+					dateSelect(ev, picker);
 				});
 			}
 
@@ -1943,6 +2074,10 @@ if (!Object.entries) {
 				if (settingsDt.oFeatures.bServerSide !== true) {
 					addCustomFunctionFilterCapability(table_selector_jq_friendly, "yadcf-filter-" + table_selector_jq_friendly + "-" + column_number, column_number);
 				}
+			}
+
+			if (columnObj.datepicker_type === 'daterangepicker' && oTable.fnSettings().oFeatures.bServerSide !== true) {
+				addRangeDateFilterCapability(table_selector_jq_friendly, dateId, dateId, column_number, date_format);
 			}
 
 			resetIApiIndex();
@@ -2001,7 +2136,7 @@ if (!Object.entries) {
 				if (oTable.fnSettings().oFeatures.bServerSide !== true) {
 					oTable.fnDraw();
 				} else {
-					oTable.fnFilter(ui.values[0] + '-yadcf_delim-' + ui.values[1], column_number_filter);
+					oTable.fnFilter(ui.values[0] + columnObj.custom_range_delimiter + ui.values[1], column_number_filter);
 				}
 				min_val = +$($(event.target).parent().find(".yadcf-filter-range-number-slider-min-tip-hidden")).text();
 				max_val = +$($(event.target).parent().find(".yadcf-filter-range-number-slider-max-tip-hidden")).text();
@@ -2280,9 +2415,13 @@ if (!Object.entries) {
 				$(document).off('xhr.dt', oTable.selector);
 				$(document).off('column-visibility.dt', oTable.selector);
 				$(document).off('destroy.dt', oTable.selector);
+				$(document).off('stateLoaded.dt', oTable.selector);
 			} else {
 				$(document).off('draw', oTable.selector);
 				$(document).off('destroy', oTable.selector);
+			}
+			if ($.fn.dataTableExt.afnFiltering.length > 0) {
+				$.fn.dataTableExt.afnFiltering.splice(0, $.fn.dataTableExt.afnFiltering.length);
 			}
 			destroyThirdPartyPlugins(oTable);
 		}
@@ -2360,10 +2499,10 @@ if (!Object.entries) {
 			var dataTmp,
 				data = [],
 				i;
-			if (yadcfVersionCheck('1.10')) {
-				dataTmp = table._('tr', { filter: 'applied' });
-			} else {
+			if (table.rows) {
 				dataTmp = table.rows({ filter: 'applied'}).data().toArray();
+			} else {
+				dataTmp = table._('tr', { filter: 'applied' });
 			}
 			for (i = 0; i < dataTmp.length; i++) {
 				data.push({
@@ -2513,7 +2652,13 @@ if (!Object.entries) {
 						}
 					}
 				} else if (columnObj.column_data_type === "rendered_html") {
-					col_inner_elements = data[j]._aFilterData[column_number_filter];
+					if (data[j]._aFilterData) {
+						col_inner_elements = data[j]._aFilterData[column_number_filter];
+					} else if (columnObj.column_data_render) {
+						col_inner_elements = columnObj.column_data_render(data[j]._aData);
+					} else {
+						console.log('Looks like you missing column_data_render function for the column ' + column_number_filter);
+					}
 					if (typeof col_inner_elements !== 'string') {
 						col_inner_elements = $(col_inner_elements);
 						if (col_inner_elements.length > 0) {
@@ -2539,9 +2684,20 @@ if (!Object.entries) {
 					} else {
 						col_inner_data = col_inner_elements;
 					}
-					if ($.trim(col_inner_data) !== '' && !(col_filter_array.hasOwnProperty(col_inner_data))) {
-						col_filter_array[col_inner_data] = col_inner_data;
-						column_data.push(col_inner_data);
+					if (columnObj.text_data_delimiter !== undefined) {
+						col_inner_elements = col_inner_elements.split(columnObj.text_data_delimiter);
+						for (k = 0; k < col_inner_elements.length; k++) {
+							col_inner_data = col_inner_elements[k];
+							if ($.trim(col_inner_data) !== '' && !(col_filter_array.hasOwnProperty(col_inner_data))) {
+								col_filter_array[col_inner_data] = col_inner_data;
+								column_data.push(col_inner_data);
+							}
+						}
+					} else {
+						if ($.trim(col_inner_data) !== '' && !(col_filter_array.hasOwnProperty(col_inner_data))) {
+							col_filter_array[col_inner_data] = col_inner_data;
+							column_data.push(col_inner_data);
+						}
 					}
 				}
 			}
@@ -2580,7 +2736,8 @@ if (!Object.entries) {
 				settingsDt,
 				filterActionStr,
 				custom_func_filter_value_holder,
-				exclude_str;
+				exclude_str,
+				regex_str;
 
 			if (pSettings === undefined) {
 				settingsDt = getSettingsObjFromTable(oTable);
@@ -2623,8 +2780,11 @@ if (!Object.entries) {
 
 					columnObj.column_number = column_number;
 					column_number_data = undefined;
-					if (isNaN(settingsDt.aoColumns[column_position].mData) && typeof settingsDt.aoColumns[column_position].mData !== 'object') {
+					if (isNaN(settingsDt.aoColumns[column_position].mData) && (typeof settingsDt.aoColumns[column_position].mData !== 'object')) {
 						column_number_data = settingsDt.aoColumns[column_position].mData;
+						columnObj.column_number_data = column_number_data;
+					} else if (settingsDt.aoColumns[column_position].mData && settingsDt.aoColumns[column_position].mData.filter) {
+						column_number_data = settingsDt.aoColumns[column_position].mData.filter;
 						columnObj.column_number_data = column_number_data;
 					}
 					if (isNaN(settingsDt.aoColumns[column_position].mRender) && typeof settingsDt.aoColumns[column_position].mRender !== 'object') {
@@ -2697,8 +2857,27 @@ if (!Object.entries) {
 					}
 
 					if (columnObj.filter_type === "range_number_slider") {
-						min_val = findMinInArray(column_data, columnObj);
-						max_val = findMaxInArray(column_data, columnObj);
+						let column_data_render;
+						if (columnObj.column_number_render) {
+							column_data_render = $.extend(true, [], column_data);
+							column_data_render.forEach((data, index) => {
+								const meta = {
+									row: index,
+									col: columnObj.column_number,
+									settings: settingsDt
+								};
+								const indexData = columnObj.column_number_data ? columnObj.column_number_data : index;
+								if (typeof indexData === 'string' &&  typeof column_data_render === 'object') {
+									const cellDataRender = columnObj.column_number_render(getProp(column_data_render, indexData), 'filter', column_data, meta);
+									setProp(column_data_render, indexData, (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : getProp(column_data, indexData));
+								}	else {
+								const cellDataRender = columnObj.column_number_render(column_data_render[indexData], 'filter', column_data, meta);
+								column_data_render[indexData] = (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : column_data[indexData];
+								}
+							});
+						}
+						min_val = findMinInArray(column_data_render ? column_data_render : column_data, columnObj);
+						max_val = findMaxInArray(column_data_render ? column_data_render : column_data, columnObj);
 					}
 
 					if (filter_container_id === undefined && columnObj.filter_container_selector === undefined) {
@@ -2730,7 +2909,7 @@ if (!Object.entries) {
 							}
 						}
 						$filter_selector = $(filter_selector_string).find(".yadcf-filter");
-						if (columnObj.select_type === 'select2') {
+						if (columnObj.select_type === 'select2' || columnObj.select_type === 'custom_select') {
 							$filter_selector = $(filter_selector_string).find("select.yadcf-filter");
 						}
 					} else {
@@ -2743,6 +2922,9 @@ if (!Object.entries) {
 						}
 						filter_selector_string = columnObj.filter_container_selector;
 						$filter_selector = $(filter_selector_string).find(".yadcf-filter");
+						if (columnObj.select_type === 'select2' || columnObj.select_type === 'custom_select') {
+							$filter_selector = $(filter_selector_string).find("select.yadcf-filter");
+						}
 					}
 
 					if (columnObj.filter_type === "select" || columnObj.filter_type === 'custom_func' || columnObj.filter_type === "multi_select" || columnObj.filter_type === 'multi_select_custom_func') {
@@ -2792,18 +2974,25 @@ if (!Object.entries) {
 							if (columnObj.filter_type === 'custom_func' || columnObj.filter_type === 'multi_select_custom_func') {
 								custom_func_filter_value_holder = $('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number).val();
 							}
-							$filter_selector.empty();
-							$filter_selector.append(column_data);
-							if (settingsDt.aoPreSearchCols[column_position].sSearch !== '') {
-								tmpStr = settingsDt.aoPreSearchCols[column_position].sSearch;
-								if (columnObj.filter_type === "select") {
-									tmpStr = yadcfParseMatchFilter(tmpStr, getOptions(oTable.selector)[column_number].filter_match_mode);
-									$('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number).val(tmpStr).addClass("inuse");
-								} else if (columnObj.filter_type === "multi_select") {
-									tmpStr = yadcfParseMatchFilterMultiSelect(tmpStr, getOptions(oTable.selector)[column_number].filter_match_mode);
-									tmpStr = tmpStr.replace(/\\/g, "");
-									tmpStr = tmpStr.split("|");
-									$('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number).val(tmpStr);
+							if (!columnObj.select_type_options || !columnObj.select_type_options.ajax) {
+								$filter_selector.empty();
+								$filter_selector.append(column_data);
+								if (settingsDt.aoPreSearchCols[column_position].sSearch !== '') {
+									tmpStr = settingsDt.aoPreSearchCols[column_position].sSearch;
+									if (columnObj.filter_type === "select") {
+										tmpStr = yadcfParseMatchFilter(tmpStr, getOptions(oTable.selector)[column_number].filter_match_mode);
+										let filter = $('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number);
+										let optionExists = filter.find("option[value='" + tmpStr + "']").length === 1;
+										// Set the state preselected value only if the option exists in the select dropdown.
+										if (optionExists) {
+											filter.val(tmpStr).addClass("inuse");
+										}
+									} else if (columnObj.filter_type === "multi_select") {
+										tmpStr = yadcfParseMatchFilterMultiSelect(tmpStr, getOptions(oTable.selector)[column_number].filter_match_mode);
+										tmpStr = tmpStr.replace(/\\/g, "");
+										tmpStr = tmpStr.split("|");
+										$('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number).val(tmpStr);
+									}
 								}
 							}
 							if (columnObj.filter_type === 'custom_func' || columnObj.filter_type === 'multi_select_custom_func') {
@@ -2884,7 +3073,12 @@ if (!Object.entries) {
 							if (settingsDt.aoPreSearchCols[column_position].sSearch !== '') {
 								tmpStr = settingsDt.aoPreSearchCols[column_position].sSearch;
 								tmpStr = yadcfParseMatchFilter(tmpStr, getOptions(oTable.selector)[column_number].filter_match_mode);
-								$('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number).val(tmpStr).addClass("inuse");
+								let filter = $('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number);
+								let optionExists = filter.find("option[value='" + tmpStr + "']").length === 1;
+								// Set the state preselected value only if the option exists in the select dropdown.
+								if (optionExists) {
+									filter.val(tmpStr).addClass("inuse");
+								}
 							}
 
 							if (columnObj.select_type !== undefined) {
@@ -3000,25 +3194,31 @@ if (!Object.entries) {
 								}
 							}
 
-							$(filter_selector_string).append(exclude_str + "<input type=\"text\" onkeydown=\"yadcf.preventDefaultForEnter(event);\" id=\"yadcf-filter-" + table_selector_jq_friendly + "-" + column_number + "\" class=\"yadcf-filter " + columnObj.style_class + "\" onmousedown=\"yadcf.stopPropagation(event);\" onclick='yadcf.stopPropagation(event);" +
-							"' placeholder='" + filter_default_label + "'" + " filter_match_mode='" + filter_match_mode + "' " + filterActionStr + "></input>");
+							regex_str = '';
+							if (columnObj.regex_check_box === true) {
+								if (columnObj.externally_triggered !== true) {
+									regex_str = '<span class="yadcf-regex-wrapper" onmousedown="yadcf.stopPropagation(event);" onclick="yadcf.stopPropagation(event);">' +
+										'<div class="yadcf-label small">' + columnObj.regex_label + '</div><input type="checkbox" title="' + columnObj.regex_label + '" onclick="yadcf.stopPropagation(event);yadcf.textKeyUP(event,\'' + table_selector_jq_friendly + '\',' + column_number + ');"></span>';
+								} else {
+									regex_str = '<span class="yadcf-regex-wrapper" onmousedown="yadcf.stopPropagation(event);" onclick="yadcf.stopPropagation(event);">' +
+										'<div class="yadcf-label small">' + columnObj.regex_label + '</div><input type="checkbox" title="' + columnObj.regex_label + '" onclick="yadcf.stopPropagation(event);"></span>';
+								}
+							}
+
+							let append_input = "<input type=\"text\" onkeydown=\"yadcf.preventDefaultForEnter(event);\" id=\"yadcf-filter-" + table_selector_jq_friendly + "-" + column_number + "\" class=\"yadcf-filter " + columnObj.style_class + "\" onmousedown=\"yadcf.stopPropagation(event);\" onclick='yadcf.stopPropagation(event);" +
+							"' placeholder='" + filter_default_label + "'" + " filter_match_mode='" + filter_match_mode + "' " + filterActionStr + "></input>";
+
+							let append_checkboxes = columnObj.checkbox_position_after ? append_input + exclude_str.replace("yadcf-exclude-wrapper", "yadcf-exclude-wrapper after") + regex_str.replace("yadcf-regex-wrapper", "yadcf-regex-wrapper after")
+							: exclude_str + regex_str + append_input;
+
+							$(filter_selector_string).append(append_checkboxes);
 
 							if (filter_reset_button_text !== false) {
 								$(filter_selector_string).find(".yadcf-filter").after("<button type=\"button\" " + " id=\"yadcf-filter-" + table_selector_jq_friendly + "-" + column_number + "-reset\" onmousedown=\"yadcf.stopPropagation(event);\" " +
 									"onclick=\"yadcf.stopPropagation(event);yadcf.textKeyUP(event,'" + table_selector_jq_friendly + "', '" + column_number + "', 'clear'); return false;\" class=\"yadcf-filter-reset-button " + columnObj.reset_button_style_class + "\">" + filter_reset_button_text + "</button>");
 							}
 
-							if (settingsDt.aoPreSearchCols[column_position].sSearch !== '') {
-								tmpStr = settingsDt.aoPreSearchCols[column_position].sSearch;
-								if (columnObj.exclude === true) {
-									if (tmpStr.indexOf('^((?!') !== -1) {
-										$('#yadcf-filter-wrapper-' + table_selector_jq_friendly + '-' + column_number).find(':checkbox').prop('checked', true);
-									}
-									tmpStr = tmpStr.substring(5, tmpStr.indexOf(').)'));
-								}
-								tmpStr = yadcfParseMatchFilter(tmpStr, getOptions(oTable.selector)[column_number].filter_match_mode);
-								$('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number).val(tmpStr).addClass("inuse");
-							}
+							loadFromStateSaveTextFilter(oTable, settingsDt, columnObj, table_selector_jq_friendly, column_position, column_number);
 
 						} else if (columnObj.filter_type === "date" || columnObj.filter_type === 'date_custom_func') {
 
@@ -3043,14 +3243,18 @@ if (!Object.entries) {
 						$(filter_selector_string).find(".yadcf-filter").val($(document).data("#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number + "_val"));
 					}
 					if (columnObj.filter_type === "auto_complete") {
-						columnObj.filter_plugin_options = {
+						let autocompleteObj = {
 							source: $(document).data("yadcf-filter-" + table_selector_jq_friendly + "-" + column_number),
 							select: autocompleteSelect
 						};
 						if (columnObj.externally_triggered === true) {
-							delete columnObj.filter_plugin_options.select;
+							delete autocompleteObj.select;
 						}
-						$("#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).autocomplete(columnObj.filter_plugin_options);
+						if (columnObj.filter_plugin_options !== undefined) {
+							$.extend(autocompleteObj, columnObj.filter_plugin_options);
+						}
+
+						$("#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).autocomplete(autocompleteObj);
 						if (settingsDt.aoPreSearchCols[column_position].sSearch !== '') {
 							tmpStr = settingsDt.aoPreSearchCols[column_position].sSearch;
 							tmpStr = yadcfParseMatchFilter(tmpStr, getOptions(oTable.selector)[column_number].filter_match_mode);
@@ -3061,6 +3265,34 @@ if (!Object.entries) {
 			}
 			if (exFilterColumnQueue.length > 0) {
 				(exFilterColumnQueue.shift())();
+			}
+		}
+
+		function loadFromStateSaveTextFilter(oTable, settingsDt, columnObj, table_selector_jq_friendly, column_position, column_number) {
+			if (settingsDt.aoPreSearchCols[column_position].sSearch !== '') {
+				let tmpStr = settingsDt.aoPreSearchCols[column_position].sSearch;
+				if (columnObj.exclude === true) {
+					if (tmpStr.indexOf('^((?!') !== -1) {
+						$('#yadcf-filter-wrapper-' + table_selector_jq_friendly + '-' + column_number).find('.yadcf-exclude-wrapper').find(':checkbox').prop('checked', true);
+						$('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number).addClass('inuse-exclude');
+					}
+					if (tmpStr.indexOf(').)') !== -1) {
+						tmpStr = tmpStr.substring(5, tmpStr.indexOf(').)'));
+					}
+				}
+				// load saved regex_checkbox state
+				if (columnObj.regex_check_box === true) {
+					if (settingsDt.oFeatures.bStateSave === true && settingsDt.oLoadedState) {
+						if (settingsDt.oLoadedState.yadcfState && settingsDt.oLoadedState.yadcfState[table_selector_jq_friendly] && settingsDt.oLoadedState.yadcfState[table_selector_jq_friendly][column_number]) {
+							if (settingsDt.oLoadedState.yadcfState[table_selector_jq_friendly][column_number].regex_check_box) {
+								$('#yadcf-filter-wrapper-' + table_selector_jq_friendly + '-' + column_number).find('.yadcf-regex-wrapper').find(':checkbox').prop('checked', true);
+								$('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number).addClass('inuse-regex');
+							}
+						}
+					}
+				}
+				tmpStr = yadcfParseMatchFilter(tmpStr, getOptions(oTable.selector)[column_number].filter_match_mode);
+				$('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number).val(tmpStr).addClass("inuse");
 			}
 		}
 
@@ -3089,9 +3321,15 @@ if (!Object.entries) {
 
 			columnObj = getOptions(oTable.selector)[column_number];
 
-			$(event.target).parent().find(".yadcf-filter-range").val("");
-			if ($(event.target).parent().find(".yadcf-filter-range-number").length > 0) {
-				$($(event.target).parent().find(".yadcf-filter-range")[0]).focus();
+			const buttonSelector = $(event.target).prop('nodeName') === 'BUTTON' ? $(event.target).parent() : $(event.target).parent().parent();
+
+			if (columnObj.datepicker_type === 'daterangepicker') {
+				$('#' + "yadcf-filter-" + table_selector_jq_friendly + '-' + column_number).val("");
+			} else {
+				buttonSelector.find(".yadcf-filter-range").val("");
+				if (buttonSelector.find(".yadcf-filter-range-number").length > 0) {
+					$(buttonSelector.find(".yadcf-filter-range")[0]).focus();
+				}
 			}
 
 			if (oTable.fnSettings().oFeatures.bServerSide !== true) {
@@ -3125,7 +3363,7 @@ if (!Object.entries) {
 			}
 			resetIApiIndex();
 
-			$(event.target).parent().find(".yadcf-filter-range").removeClass("inuse");
+			buttonSelector.parent().find(".yadcf-filter-range").removeClass("inuse");
 			if (columnObj.datepicker_type === 'bootstrap-datepicker') {
 				$fromInput = $("#" + fromId);
 				$toInput = $("#" + toId);
@@ -3146,24 +3384,26 @@ if (!Object.entries) {
 			event = eventTargetFixUp(event);
 			$.fn.dataTableExt.iApiIndex = oTablesIndex[table_selector_jq_friendly];
 
-			column_number = parseInt($(event.target).prev().find(".yadcf-filter-range-number-slider").attr("id").replace("yadcf-filter-" + table_selector_jq_friendly + "-slider-", ""), 10);
+			const buttonSelector = $(event.target).prop('nodeName') === 'BUTTON' ? $(event.target) : $(event.target).parent();
 
-			min_val = +$($(event.target).parent().find(".yadcf-filter-range-number-slider-min-tip-hidden")).text();
-			max_val = +$($(event.target).parent().find(".yadcf-filter-range-number-slider-max-tip-hidden")).text();
+			column_number = parseInt(buttonSelector.prev().find(".yadcf-filter-range-number-slider").attr("id").replace("yadcf-filter-" + table_selector_jq_friendly + "-slider-", ""), 10);
+
+			min_val = +$(buttonSelector.parent().find(".yadcf-filter-range-number-slider-min-tip-hidden")).text();
+			max_val = +$(buttonSelector.parent().find(".yadcf-filter-range-number-slider-max-tip-hidden")).text();
 
 			currentFilterValues = exGetColumnFilterVal(oTable, column_number);
 			if (+currentFilterValues.from === min_val && +currentFilterValues.to === max_val) {
 				return;
 			}
 
-			$(event.target).prev().find(".yadcf-filter-range-number-slider").slider("option", "yadcf-reset", true);
-			$(event.target).prev().find(".yadcf-filter-range-number-slider").slider("option", "values", [min_val, max_val]);
+			buttonSelector.prev().find(".yadcf-filter-range-number-slider").slider("option", "yadcf-reset", true);
+			buttonSelector.prev().find(".yadcf-filter-range-number-slider").slider("option", "values", [min_val, max_val]);
 
-			$($(event.target).prev().find(".ui-slider-handle")[0]).attr("tabindex", -1).focus();
+			$(buttonSelector.prev().find(".ui-slider-handle")[0]).attr("tabindex", -1).focus();
 
-			$($(event.target).prev().find(".ui-slider-handle")[0]).removeClass("inuse");
-			$($(event.target).prev().find(".ui-slider-handle")[1]).removeClass("inuse");
-			$(event.target).prev().find(".ui-slider-range").removeClass("inuse");
+			$(buttonSelector.prev().find(".ui-slider-handle")[0]).removeClass("inuse");
+			$(buttonSelector.prev().find(".ui-slider-handle")[1]).removeClass("inuse");
+			buttonSelector.prev().find(".ui-slider-range").removeClass("inuse");
 
 			oTable.fnDraw();
 			resetIApiIndex();
@@ -3252,7 +3492,7 @@ if (!Object.entries) {
 
 				min = document.getElementById(fromId).value;
 				max = document.getElementById(toId).value;
-					
+
 				if (columnObj.datepicker_type === 'jquery-ui') {
 					try {
 						if (min.length === (date_format.length + 2)) {
@@ -3266,13 +3506,13 @@ if (!Object.entries) {
 					} catch (err) {}
 				} else if (columnObj.datepicker_type === 'bootstrap-datetimepicker') {
 					try {
-						min = moment(min, columnObj.moment_date_format).toDate();
+						min = moment(min, columnObj.date_format).toDate();
 						if (isNaN(min.getTime())) {
 							min = '';
 						}
 					} catch (err) {}
 					try {
-						max = moment(max, columnObj.moment_date_format).toDate();
+						max = moment(max, columnObj.date_format).toDate();
 						if (isNaN(max.getTime())) {
 							max = '';
 						}
@@ -3300,7 +3540,7 @@ if (!Object.entries) {
 						saveStateSave(oTable, column_number, table_selector_jq_friendly, !min ? '' : minTmp , !max ? '' : maxTmp);
 						oTable.fnDraw();
 					} else {
-						oTable.fnFilter(document.getElementById(fromId).value + '-yadcf_delim-' + document.getElementById(toId).value, column_number_filter);
+						oTable.fnFilter(document.getElementById(fromId).value + columnObj.custom_range_delimiter + document.getElementById(toId).value, column_number_filter);
 					}
 
 					if (min instanceof Date) {
@@ -3375,7 +3615,7 @@ if (!Object.entries) {
 					if (oTable.fnSettings().oFeatures.bServerSide !== true) {
 						oTable.fnDraw();
 					} else {
-						oTable.fnFilter(min + '-yadcf_delim-' + max, column_number_filter);
+						oTable.fnFilter(min + columnObj.custom_range_delimiter + max, column_number_filter);
 					}
 					if (document.getElementById(fromId).value !== "") {
 						$("#" + fromId).addClass("inuse");
@@ -3605,11 +3845,14 @@ if (!Object.entries) {
 				columnObj,
 				settingsDt = getSettingsObjFromTable(oTable),
 				exclude,
-				keyCodes = [37, 38, 39, 40];
+				regex_check_box,
+				yadcfState,
+				keyCodes = [37, 38, 39, 40, 17];
 
-			if (keyCodes.indexOf(ev.keyCode) !== -1) {
+			if (keyCodes.indexOf(ev.keyCode) !== -1 || ctrlPressed) {
 				return;
 			}
+
 			column_number_filter = calcColumnNumberFilter(settingsDt, column_number, table_selector_jq_friendly);
 
 			columnObj = getOptions(oTable.selector)[column_number];
@@ -3625,24 +3868,53 @@ if (!Object.entries) {
 				$.fn.dataTableExt.iApiIndex = oTablesIndex[table_selector_jq_friendly];
 
 				if (clear === 'clear' || $(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).val() === '') {
-					if (clear === 'clear' && exGetColumnFilterVal(oTable, column_number) === '') {
-						return;
+					if (clear === 'clear') {
+						// uncheck checkboxes on reset button pressed
+						resetExcludeRegexCheckboxes($(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number));
+						if (exGetColumnFilterVal(oTable, column_number) === '') {
+							return;
+						}
 					}
 
 					$(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).val("").focus();
-					$(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).removeClass("inuse");
+					$(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).removeClass("inuse inuse-exclude inuse-regex");
 					oTable.fnFilter("", column_number_filter);
 					resetIApiIndex();
 					return;
 				}
+				// delete class also on  regex or exclude checkbox uncheck
+				$(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).removeClass("inuse-exclude inuse-regex");
+				var inuseClass = "inuse";
 
 				if (columnObj.exclude === true) {
 					exclude = $(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).closest('.yadcf-filter-wrapper').find('.yadcf-exclude-wrapper :checkbox').prop('checked');
+					inuseClass = exclude ? inuseClass + " inuse-exclude" : inuseClass;
 				}
-				$(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).addClass("inuse");
+				if (columnObj.regex_check_box === true) {
+					regex_check_box = $(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).closest('.yadcf-filter-wrapper').find('.yadcf-regex-wrapper :checkbox').prop('checked');
+					inuseClass = regex_check_box ? inuseClass + " inuse-regex" : inuseClass;
+				}
+				$(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).addClass(inuseClass);
 
-				yadcfMatchFilter(oTable, $(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).val(), columnObj.filter_match_mode, column_number_filter, exclude, column_number);
+				yadcfMatchFilter(oTable, $(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).val(), regex_check_box ? 'regex' : columnObj.filter_match_mode, column_number_filter, exclude, column_number);
 
+				// save regex_checkbox state
+				if (oTable.fnSettings().oFeatures.bStateSave === true) {
+					if (oTable.fnSettings().oLoadedState.yadcfState !== undefined && oTable.fnSettings().oLoadedState.yadcfState[table_selector_jq_friendly] !== undefined) {
+						oTable.fnSettings().oLoadedState.yadcfState[table_selector_jq_friendly][column_number] =
+							{
+								regex_check_box: regex_check_box
+							};
+					} else {
+						yadcfState = {};
+						yadcfState[table_selector_jq_friendly] = [];
+						yadcfState[table_selector_jq_friendly][column_number] = {
+							regex_check_box: regex_check_box
+						};
+						oTable.fnSettings().oLoadedState.yadcfState = yadcfState;
+					}
+					oTable.fnSettings().oApi._fnSaveState(oTable.fnSettings());
+				}
 				resetIApiIndex();
 			};
 
@@ -3768,6 +4040,21 @@ if (!Object.entries) {
 			}
 			//events that affects both DOM and Ajax
 			if (yadcfVersionCheck('1.10')) {
+				$(document).off('stateLoaded.dt', oTable.selector).on('stateLoaded.dt', oTable.selector, function (event, settings) {
+					let args = yadcf.getOptions(settings.oInstance.selector);
+					let columnObjKey;
+					for (columnObjKey in args) {
+						if (args.hasOwnProperty(columnObjKey)) {
+							let columnObj = args[columnObjKey];
+							let column_number = columnObj.column_number;
+							column_number = +column_number;
+							let column_position = column_number;
+							let table_selector_jq_friendly = yadcf.generateTableSelectorJQFriendly2(oTable);
+
+							loadFromStateSaveTextFilter(oTable, settings, columnObj, table_selector_jq_friendly, column_position, column_number);
+						}
+					}
+				});
 				$(document).off('draw.dt', oTable.selector).on('draw.dt', oTable.selector, function (event, settings) {
 					appendFilters(oTable, yadcf.getOptions(settings.oInstance.selector), settings.oInstance.selector, settings);
 				});
@@ -3932,13 +4219,13 @@ if (!Object.entries) {
 			$(document).data(instance.selector + "_filters_position", params.filters_position);
 
 			if ($(instance.selector).length === 1) {
-				setOptions(instance.selector, options_arg, params);
+				setOptions(instance.selector, options_arg, params, oTable);
 				initAndBindTable(instance, instance.selector, 0, oTable);
 			} else {
 				for (i; i < $(instance.selector).length; i++) {
 					$.fn.dataTableExt.iApiIndex = i;
 					selector = instance.selector + ":eq(" + i + ")";
-					setOptions(instance.selector, options_arg, params);
+					setOptions(instance.selector, options_arg, params, oTable);
 					initAndBindTable(instance, selector, i, oTable);
 				}
 				$.fn.dataTableExt.iApiIndex = 0;
@@ -3988,7 +4275,7 @@ if (!Object.entries) {
 					tableTmp = tablesArray[0];
 				}
 				settingsDt = getSettingsObjFromTable(tableTmp);
-				if (settingsDt.aoPreSearchCols[columnForStateSaving].sSearch !== '') {
+				if (settingsDt.aoPreSearchCols[columnForStateSaving] && settingsDt.aoPreSearchCols[columnForStateSaving].sSearch !== '') {
 					tmpStr = settingsDt.aoPreSearchCols[columnForStateSaving].sSearch;
 					tmpStr = yadcfParseMatchFilter(tmpStr, filterOptions.filter_match_mode);
 					$('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number_str).val(tmpStr).addClass("inuse");
@@ -4156,7 +4443,7 @@ if (!Object.entries) {
 				}
 				tablesSelectors = tablesSelectors.substring(0, tablesSelectors.length - 1);
 
-				setOptions(tablesSelectors + '_' + column_number_str, dummyArr);
+				setOptions(tablesSelectors + '_' + column_number_str, dummyArr, {});
 				oTables[tablesSelectors] = tablesArray;
 				appendFiltersMultipleTables(tablesArray, tablesSelectors, columnsObj);
 			}
@@ -4178,14 +4465,22 @@ if (!Object.entries) {
 			if (closeSelect2) {
 				let currentSelect2;
 				if (evt.target.className.indexOf('yadcf-filter-reset-button') !== -1) {
-					$('select.yadcf-filter').select2('close');
+					$('select.yadcf-filter').each(function( index ) {
+						if ($(this).data('select2')) {
+							$(this).select2('close');
+						}
+					});
 				} else {
 					currentSelect2 = $($(evt.target).closest('.yadcf-filter-wrapper').find('select'));
-					$('select.yadcf-filter').not(currentSelect2).select2('close');
+					$('select.yadcf-filter').each(function( index ) {
+						if (!$(this).is(currentSelect2) && $(this).data('select2')) {
+							$(this).select2('close');
+						}
+					});
 				}
 			}
 		}
-		
+
 		function stopPropagation(evt) {
 			close3rdPPluginsNeededClose(evt);
 			if (evt.stopPropagation !== undefined) {
@@ -4194,14 +4489,23 @@ if (!Object.entries) {
 				evt.cancelBubble = true;
 			}
 		}
-
 		function preventDefaultForEnter(evt) {
+			ctrlPressed = false;
 			if (evt.keyCode === 13) {
 				if (evt.preventDefault) {
 					evt.preventDefault();
 				} else {
 					evt.returnValue = false;
 				}
+			}
+			if (evt.keyCode == 65 && evt.ctrlKey) {
+				ctrlPressed = true;
+				evt.target.select();
+				return;
+			}
+			if (evt.ctrlKey && (evt.keyCode == 67 || evt.keyCode == 88)) {
+				ctrlPressed = true;
+				return;
 			}
 		}
 
@@ -4298,7 +4602,7 @@ if (!Object.entries) {
 						if (table_arg.fnSettings().oFeatures.bServerSide === true) {
 							min = filter_value.from;
 							max = filter_value.to;
-							table_arg.fnSettings().aoPreSearchCols[column_position].sSearch = min + '-yadcf_delim-' + max;
+							table_arg.fnSettings().aoPreSearchCols[column_position].sSearch = min + columnObj.custom_range_delimiter + max;
 						}
 						saveStateSave(table_arg, column_number, table_selector_jq_friendly, filter_value.from, filter_value.to);
 						break;
@@ -4318,7 +4622,7 @@ if (!Object.entries) {
 							$('#' + toId).removeClass('inuse');
 						}
 						if (table_arg.fnSettings().oFeatures.bServerSide === true) {
-							table_arg.fnSettings().aoPreSearchCols[column_position].sSearch = filter_value.from + '-yadcf_delim-' + filter_value.to;
+							table_arg.fnSettings().aoPreSearchCols[column_position].sSearch = filter_value.from + columnObj.custom_range_delimiter + filter_value.to;
 						}
 						saveStateSave(table_arg, column_number, table_selector_jq_friendly, filter_value.from, filter_value.to);
 						break;
@@ -4351,7 +4655,7 @@ if (!Object.entries) {
 							$('#' + sliderId).slider('values', 1, filter_value.to);
 						}
 						if (table_arg.fnSettings().oFeatures.bServerSide === true) {
-							table_arg.fnSettings().aoPreSearchCols[column_position].sSearch = filter_value.from + '-yadcf_delim-' + filter_value.to;
+							table_arg.fnSettings().aoPreSearchCols[column_position].sSearch = filter_value.from + columnObj.custom_range_delimiter + filter_value.to;
 						}
 						saveStateSave(table_arg, column_number, table_selector_jq_friendly, filter_value.from, filter_value.to);
 						break;
@@ -4401,7 +4705,12 @@ if (!Object.entries) {
 			optionsObj = getOptions(table_arg.selector)[column_number];
 			table_selector_jq_friendly = yadcf.generateTableSelectorJQFriendly2(table_arg);
 
-			$filterElement = $('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number);
+			let selectorePrefix = '';
+			let settingsDt = getSettingsObjFromTable(table_arg);
+			if (optionsObj.filters_position === 'tfoot' && settingsDt.oScroll.sX) {
+				selectorePrefix = '.dataTables_scrollFoot ';
+			}
+			$filterElement = $(selectorePrefix + '#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number);
 			switch (optionsObj.filter_type) {
 			case 'select':
 			case 'custom_func':
@@ -4430,24 +4739,24 @@ if (!Object.entries) {
 				fromId = 'yadcf-filter-' + table_selector_jq_friendly + '-from-date-' + column_number;
 				toId = 'yadcf-filter-' + table_selector_jq_friendly + '-to-date-' + column_number;
 
-				retVal.from = $('#' + fromId).val();
-				retVal.to = $('#' + toId).val();
+				retVal.from = $(selectorePrefix + '#' + fromId).val();
+				retVal.to = $(selectorePrefix + '#' + toId).val();
 				break;
 			case 'range_number':
 				retVal = {};
 				fromId = 'yadcf-filter-' + table_selector_jq_friendly + '-from-' + column_number;
 				toId = 'yadcf-filter-' + table_selector_jq_friendly + '-to-' + column_number;
 
-				retVal.from = $('#' + fromId).val();
-				retVal.to = $('#' + toId).val();
+				retVal.from = $(selectorePrefix + '#' + fromId).val();
+				retVal.to = $(selectorePrefix + '#' + toId).val();
 				break;
 			case 'range_number_slider':
 				retVal = {};
 				fromId = 'yadcf-filter-' + table_selector_jq_friendly + '-min_tip-' + column_number;
 				toId = 'yadcf-filter-' + table_selector_jq_friendly + '-max_tip-' + column_number;
 
-				retVal.from = $('#' + fromId).text();
-				retVal.to = $('#' + toId).text();
+				retVal.from = $(selectorePrefix + '#' + fromId).text();
+				retVal.to = $(selectorePrefix + '#' + toId).text();
 
 				break;
 			default:
@@ -4529,8 +4838,11 @@ if (!Object.entries) {
 						continue;
 					}
 					$(document).removeData("#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number + "_val");
-
-					$filterElement = $('#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number);
+					let selectorePrefix = '';
+					if (optionsObj.filters_position === 'tfoot' && settingsDt.oScroll.sX) {
+						selectorePrefix = '.dataTables_scrollFoot ';
+					}
+					$filterElement = $(selectorePrefix + '#yadcf-filter-' + table_selector_jq_friendly + '-' + column_number);
 
 					switch (optionsObj.filter_type) {
 					case 'select':
@@ -4543,6 +4855,10 @@ if (!Object.entries) {
 						break;
 					case 'auto_complete':
 					case 'text':
+						$filterElement.val('').removeClass('inuse inuse-exclude inuse-regex');
+						table_arg.fnSettings().aoPreSearchCols[column_number].sSearch = '';
+						resetExcludeRegexCheckboxes($filterElement);
+						break;
 					case 'date':
 						$filterElement.val('').removeClass('inuse');
 						table_arg.fnSettings().aoPreSearchCols[column_number].sSearch = '';
@@ -4562,10 +4878,10 @@ if (!Object.entries) {
 					case 'range_date':
 						fromId = 'yadcf-filter-' + table_selector_jq_friendly + '-from-date-' + column_number;
 						toId = 'yadcf-filter-' + table_selector_jq_friendly + '-to-date-' + column_number;
-						$('#' + fromId).val('');
-						$('#' + fromId).removeClass('inuse');
-						$('#' + toId).val('');
-						$('#' + toId).removeClass('inuse');
+						$(selectorePrefix + '#' + fromId).val('');
+						$(selectorePrefix + '#' + fromId).removeClass('inuse');
+						$(selectorePrefix + '#' + toId).val('');
+						$(selectorePrefix + '#' + toId).removeClass('inuse');
 						if (table_arg.fnSettings().oFeatures.bServerSide === true) {
 							table_arg.fnSettings().aoPreSearchCols[column_number].sSearch = '';
 						}
@@ -4574,10 +4890,10 @@ if (!Object.entries) {
 					case 'range_number':
 						fromId = 'yadcf-filter-' + table_selector_jq_friendly + '-from-' + column_number;
 						toId = 'yadcf-filter-' + table_selector_jq_friendly + '-to-' + column_number;
-						$('#' + fromId).val('');
-						$('#' + fromId).removeClass('inuse');
-						$('#' + toId).val('');
-						$('#' + toId).removeClass('inuse');
+						$(selectorePrefix + '#' + fromId).val('');
+						$(selectorePrefix + '#' + fromId).removeClass('inuse');
+						$(selectorePrefix + '#' + toId).val('');
+						$(selectorePrefix + '#' + toId).removeClass('inuse');
 						if (table_arg.fnSettings().oFeatures.bServerSide === true) {
 							table_arg.fnSettings().aoPreSearchCols[column_number].sSearch = '';
 						}
@@ -4587,13 +4903,13 @@ if (!Object.entries) {
 						sliderId = 'yadcf-filter-' + table_selector_jq_friendly + '-slider-' + column_number;
 						fromId = 'yadcf-filter-' + table_selector_jq_friendly + '-min_tip-' + column_number;
 						toId = 'yadcf-filter-' + table_selector_jq_friendly + '-max_tip-' + column_number;
-						$('#' + fromId).text('');
-						$('#' + fromId).parent().removeClass('inuse');
-						$('#' + fromId).parent().parent().find('ui-slider-range').removeClass('inuse');
-						$('#' + toId).text('');
-						$('#' + toId).parent().removeClass('inuse');
-						$('#' + toId).parent().parent().find('.ui-slider-range').removeClass('inuse');
-						$('#' + sliderId).slider("option", "values", [$('#' + fromId).parent().parent().find('.yadcf-filter-range-number-slider-min-tip-hidden').text(), $('#' + fromId).parent().parent().find('.yadcf-filter-range-number-slider-max-tip-hidden').text()]);
+						$(selectorePrefix + '#' + fromId).text('');
+						$(selectorePrefix + '#' + fromId).parent().removeClass('inuse');
+						$(selectorePrefix + '#' + fromId).parent().parent().find('ui-slider-range').removeClass('inuse');
+						$(selectorePrefix + '#' + toId).text('');
+						$(selectorePrefix + '#' + toId).parent().removeClass('inuse');
+						$(selectorePrefix + '#' + toId).parent().parent().find('.ui-slider-range').removeClass('inuse');
+						$(selectorePrefix + '#' + sliderId).slider("option", "values", [$('#' + fromId).parent().parent().find('.yadcf-filter-range-number-slider-min-tip-hidden').text(), $('#' + fromId).parent().parent().find('.yadcf-filter-range-number-slider-max-tip-hidden').text()]);
 						if (table_arg.fnSettings().oFeatures.bServerSide === true) {
 							table_arg.fnSettings().aoPreSearchCols[column_number].sSearch = '';
 						}
@@ -4645,6 +4961,26 @@ if (!Object.entries) {
 				}
 			}
 			exFilterColumn(table_arg, filtersValuesArr, true);
+		}
+
+		function getProp(nestedObj, keys) {
+			const pathArr = Array.isArray( keys )? keys : keys.split('.');
+			return pathArr.reduce((obj, key) =>
+				(obj && obj[key] !== 'undefined') ? obj[key] : undefined, nestedObj);
+		}
+
+		function setProp( object, keys, val ) {
+  		keys = Array.isArray( keys )? keys : keys.split('.');
+  		if( keys.length>1 ){
+    		object[keys[0]] = object[keys[0]] || {};
+    		return setProp( object[keys[0]], keys.slice(1), val );
+  		}
+			object[keys[0]] = val;
+		}
+
+		function resetExcludeRegexCheckboxes(selector) {
+			selector.closest('.yadcf-filter-wrapper').find('.yadcf-exclude-wrapper :checkbox').prop('checked', false);
+			selector.closest('.yadcf-filter-wrapper').find('.yadcf-regex-wrapper :checkbox').prop('checked', false);
 		}
 
 		return {
