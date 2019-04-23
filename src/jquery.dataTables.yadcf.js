@@ -1758,10 +1758,10 @@ if (!Object.entries) {
 							};
 							if (typeof index === 'string' &&  typeof rowDataRender === 'object') {
 								const cellDataRender = columnObj.column_number_render(getProp(rowDataRender, index), 'filter', rowData, meta);
-								setProp(rowDataRender, index, (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : getProp(rowData, index));
+								setProp(rowDataRender, index, (cellDataRender !== undefined) ? cellDataRender : getProp(rowData, index));
 							}	else {
 								const cellDataRender = columnObj.column_number_render(rowDataRender[index], 'filter', rowData, meta);
-								rowDataRender[index] = (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : rowData[index];
+								rowDataRender[index] = (cellDataRender !== undefined ) ? cellDataRender : rowData[index];
 							}
 						}
 						aData = rowDataRender ? rowDataRender : rowData;
