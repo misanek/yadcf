@@ -1747,7 +1747,24 @@ if (!Object.entries) {
 						exclude_checked = $(fixedPrefix + "#yadcf-filter-wrapper-" + table_selector_jq_friendly + "-" + col_num).find('.yadcf-exclude-wrapper :checkbox').prop('checked');
 					}
 					if (rowData !== undefined) {
-						aData = rowData;
+						let rowDataRender;
+						if (columnObj.column_number_render) {
+							rowDataRender = $.extend(true, [], rowData);
+							const index = columnObj.column_number_data ? columnObj.column_number_data : column_number_filter;
+							const meta = {
+													row: iDataIndex,
+													col: columnObj.column_number,
+													settings: settingsDt
+							};
+							if (typeof index === 'string' &&  typeof rowDataRender === 'object') {
+								const cellDataRender = columnObj.column_number_render(getProp(rowDataRender, index), 'filter', rowData, meta);
+								setProp(rowDataRender, index, (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : getProp(rowData, index));
+							}	else {
+								const cellDataRender = columnObj.column_number_render(rowDataRender[index], 'filter', rowData, meta);
+								rowDataRender[index] = (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : rowData[index];
+							}
+						}
+						aData = rowDataRender ? rowDataRender : rowData;
 						if (columnObj.column_number_data !== undefined) {
 							column_number_filter = columnObj.column_number_data;
 							val = getProp(aData, column_number_filter);
