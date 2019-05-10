@@ -447,7 +447,14 @@
 * exFilterExternallyTriggered
                 Description:        Triggers all the available filters, should be used only when the externally_triggered option used
                 Arguments:          table_arg: (variable of the datatable)
-                Usage example:      yadcf.exResetAllFilters(table_arg);
+								Usage example:      yadcf.exResetAllFilters(table_arg);
+* exRefreshColumnFilterWithDataProp
+								Description:        Updates column filter with new data when data property was used in initialization for this filter
+																		 e.g. select filter when we used data property and we want to update it
+								Arguments:          table_arg: variable of the datatable
+																		col_num: number of column filter
+																		updatedData: array of new data (use same data structure as was used in yadcf.init options)
+								Usage example:      yadcf.exRefreshColumnFilterWithDataProp(table_arg, 5, ['One', 'Two', 'Three']);
 *
 *
 *
@@ -5578,6 +5585,18 @@ if (!Object.entries) {
 			parent.find('.yadcf-null-wrapper').toggle();
 		}
 
+		// updates column which uses data property, with new data
+		function exRefreshColumnFilterWithDataProp(table_arg, col_num, updatedData) {
+			if (table_arg.settings !== undefined) {
+				table_arg = table_arg.settings()[0].oInstance;
+			}
+			var columnsObj = getOptions(table_arg.selector);
+			var columnObj = columnsObj[col_num];
+			columnObj.data = updatedData;
+			var table_selector_jq_friendly = yadcf.generateTableSelectorJQFriendly2(table_arg);
+			refreshSelectPlugin(columnObj, $("#yadcf-filter-" + table_selector_jq_friendly + "-" + col_num));
+		}
+
 		return {
 			init: init,
 			doFilter: doFilter,
@@ -5610,7 +5629,8 @@ if (!Object.entries) {
 			initSelectPluginCustomTriggers: initSelectPluginCustomTriggers,
 			preventDefaultForEnter: preventDefaultForEnter,
 			generateTableSelectorJQFriendly2: generateTableSelectorJQFriendly2,
-			toogleCheckboxes: toogleCheckboxes
+			toogleCheckboxes: toogleCheckboxes,
+			exRefreshColumnFilterWithDataProp: exRefreshColumnFilterWithDataProp
 		};
 
 	}());
