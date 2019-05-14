@@ -1789,10 +1789,10 @@ if (!Object.entries) {
 							};
 							const renderFunc = typeof columnObj.column_number_render === 'object' ? columnObj.column_number_render.filter : columnObj.column_number_render ;
 							if (typeof index === 'string' &&  typeof rowDataRender === 'object') {
-								const cellDataRender = renderFunc ? columnObj.renderFunc(getProp(rowDataRender, index), 'filter', rowData, meta) : renderFunc;
+								const cellDataRender = renderFunc ? renderFunc(getProp(rowDataRender, index), 'filter', rowData, meta) : renderFunc;
 								setProp(rowDataRender, index, (cellDataRender !== undefined) ? cellDataRender : getProp(rowData, index));
 							}	else {
-								const cellDataRender = renderFunc ? columnObj.renderFunc(rowDataRender[index], 'filter', rowData, meta) : renderFunc;
+								const cellDataRender = renderFunc ? renderFunc(rowDataRender[index], 'filter', rowData, meta) : renderFunc;
 								rowDataRender[index] = (cellDataRender !== undefined) ? cellDataRender : rowData[index];
 							}
 						}
