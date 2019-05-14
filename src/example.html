@@ -86,7 +86,18 @@
 
   ];
 
-  function renderFunc(data, type, row, meta) {
+  const renderObj = {
+            _: (data, type, row, meta) => {
+                return data;
+            },
+            // filter: (data, type, row, meta) => {
+            //   return data === null ? 0 : data;
+            // },
+            display: (data, type, row, meta) => {
+              return data === null ? 'null': data;
+            }
+  };
+  /*function renderFunc(data, type, row, meta) {
 
     if (type === 'display') {
 
@@ -94,7 +105,7 @@
     }
 
     return data;
-  }
+  }*/
 
   $(document).ready(function() {
     const table = $('#example').DataTable({
@@ -105,42 +116,42 @@
       columns: [{
           title: "ID",
           data: 'id.name',
-          render: renderFunc
+          render: renderObj
         },
         {
           title: "height",
           data: 'height',
-          render: renderFunc,
+          render: renderObj,
         },
         {
           title: "level",
           data: 'level',
-          render: renderFunc,
+          render: renderObj,
         },
         {
           title: "weight",
           data: 'weight',
-          render: renderFunc,
+          render: renderObj,
         },
         {
           title: "age",
           data: 'age',
-          render: renderFunc,
+          render: renderObj,
         },
         {
           title: "lucky number",
           data: 'number',
-          render: renderFunc,
+          render: renderObj,
         },
         {
           title: "salary",
           data: 'salary',
-          render: renderFunc,
+          render: renderObj,
         },
         {
           title: "card",
           data: 'card',
-          render: renderFunc,
+          render: renderObj,
         },
         // {
         //   title: "gender",

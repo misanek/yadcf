@@ -1414,11 +1414,12 @@ if (!Object.entries) {
 													col: columnObj.column_number,
 													settings: settingsDt
 							};
+							const renderFunc = typeof columnObj.column_number_render === 'object' ? columnObj.column_number_render.filter : columnObj.column_number_render ;
 							if (typeof index === 'string' &&  typeof rowDataRender === 'object') {
-								const cellDataRender = columnObj.column_number_render(getProp(rowDataRender, index), 'filter', rowData, meta);
+								const cellDataRender = renderFunc ? renderFunc(getProp(rowDataRender, index), 'filter', rowData, meta) : renderFunc;
 								setProp(rowDataRender, index, (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : getProp(rowData, index));
 							}	else {
-								const cellDataRender = columnObj.column_number_render(rowDataRender[index], 'filter', rowData, meta);
+								const cellDataRender = renderFunc ? renderFunc(rowDataRender[index], 'filter', rowData, meta) : renderFunc;
 								rowDataRender[index] = (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : rowData[index];
 							}
 						}
@@ -1787,11 +1788,12 @@ if (!Object.entries) {
 													col: columnObj.column_number,
 													settings: settingsDt
 							};
+							const renderFunc = typeof columnObj.column_number_render === 'object' ? columnObj.column_number_render.filter : columnObj.column_number_render ;
 							if (typeof index === 'string' &&  typeof rowDataRender === 'object') {
-								const cellDataRender = columnObj.column_number_render(getProp(rowDataRender, index), 'filter', rowData, meta);
+								const cellDataRender = renderFunc ? renderFunc(getProp(rowDataRender, index), 'filter', rowData, meta) : renderFunc;
 								setProp(rowDataRender, index, (cellDataRender !== undefined) ? cellDataRender : getProp(rowData, index));
 							}	else {
-								const cellDataRender = columnObj.column_number_render(rowDataRender[index], 'filter', rowData, meta);
+								const cellDataRender = renderFunc ? renderFunc(rowDataRender[index], 'filter', rowData, meta) : renderFunc;
 								rowDataRender[index] = (cellDataRender !== undefined) ? cellDataRender : rowData[index];
 							}
 						}
@@ -2852,7 +2854,7 @@ if (!Object.entries) {
 			if (isNaN(settingsDt.aoColumns[column_number_filter].mData) && typeof settingsDt.aoColumns[column_number_filter].mData !== 'object') {
 				columnObj.column_number_data = settingsDt.aoColumns[column_number_filter].mData;
 			}
-			if (isNaN(settingsDt.aoColumns[column_number_filter].mRender) && typeof settingsDt.aoColumns[column_number_filter].mRender !== 'object') {
+			if (isNaN(settingsDt.aoColumns[column_number_filter].mRender)) { // && typeof settingsDt.aoColumns[column_number_filter].mRender !== 'object') {
 				columnObj.column_number_render = settingsDt.aoColumns[column_number_filter].mRender;
 			}
 
@@ -3097,7 +3099,7 @@ if (!Object.entries) {
 						column_number_data = settingsDt.aoColumns[column_position].mData.filter;
 						columnObj.column_number_data = column_number_data;
 					}
-					if (isNaN(settingsDt.aoColumns[column_position].mRender) && typeof settingsDt.aoColumns[column_position].mRender !== 'object') {
+					if (isNaN(settingsDt.aoColumns[column_position].mRender)) { // && typeof settingsDt.aoColumns[column_position].mRender !== 'object') {
 						columnObj.column_number_render = settingsDt.aoColumns[column_position].mRender;
 					}
 					filter_default_label = columnObj.filter_default_label;
@@ -3179,11 +3181,12 @@ if (!Object.entries) {
 									settings: settingsDt
 								};
 								const indexData = columnObj.column_number_data ? columnObj.column_number_data : index;
+								const renderFunc = typeof columnObj.column_number_render === 'object' ? columnObj.column_number_render.filter : columnObj.column_number_render ;
 								if (typeof indexData === 'string' &&  typeof column_data_render === 'object') {
-									const cellDataRender = columnObj.column_number_render(getProp(column_data_render, indexData), 'filter', column_data, meta);
+									const cellDataRender = renderFunc ? renderFunc(getProp(column_data_render, indexData), 'filter', column_data, meta) : renderFunc;
 									setProp(column_data_render, indexData, (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : getProp(column_data, indexData));
 								}	else {
-								const cellDataRender = columnObj.column_number_render(column_data_render[indexData], 'filter', column_data, meta);
+								const cellDataRender = renderFunc ? renderFunc(column_data_render[indexData], 'filter', column_data, meta) : renderFunc;
 								column_data_render[indexData] = (cellDataRender !== undefined && cellDataRender !== null) ? cellDataRender : column_data[indexData];
 								}
 							});
