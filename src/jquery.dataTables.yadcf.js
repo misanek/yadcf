@@ -450,13 +450,12 @@
 								Usage example:      yadcf.exResetAllFilters(table_arg);
 
 * exRefreshColumnFilterWithDataProp
-								Description:        Updates column filter with new data when data property was used in initialization for this filter
-																		 e.g. select filter when we used data property and we want to update it
+								Description:        Updates column filter with new data, when data property was used in initialization for this filter
+																		 e.g. select filter, when we used data property and we want to update it
 								Arguments:          table_arg: variable of the datatable
-																		col_num: number of column filter
+																		col_num: number index of column filter
 																		updatedData: array of new data (use same data structure as was used in yadcf.init options)
 								Usage example:      yadcf.exRefreshColumnFilterWithDataProp(table_arg, 5, ['One', 'Two', 'Three']);
-
 *
 *
 *
@@ -3148,6 +3147,7 @@ if (!Object.entries) {
 					if (filter_reset_button_text === undefined) {
 						filter_reset_button_text = "x";
 					}
+
 					if (data !== undefined) {
 						for (ii = 0; ii < data.length; ii++) {
 							column_data.push(data[ii]);
@@ -3172,7 +3172,7 @@ if (!Object.entries) {
 						let column_data_render;
 						if (columnObj.column_number_render) {
 							column_data_render = $.extend(true, [], column_data);
-							column_data_render.forEach(function(data, index) {
+							column_data_render.forEach((data, index) => {
 								const meta = {
 									row: index,
 									col: columnObj.column_number,
@@ -5562,15 +5562,14 @@ if (!Object.entries) {
 		}
 
 		function getProp(nestedObj, keys) {
-			var pathArr = Array.isArray(keys) ? keys : keys.split('.');
-			return pathArr.reduce(function (obj, key) {
-				return obj && obj[key] !== 'undefined' ? obj[key] : undefined;
-			}, nestedObj);
+			const pathArr = Array.isArray( keys )? keys : keys.split('.');
+			return pathArr.reduce((obj, key) =>
+				(obj && obj[key] !== 'undefined') ? obj[key] : undefined, nestedObj);
 		}
 
 		function setProp( object, keys, val ) {
   		keys = Array.isArray( keys )? keys : keys.split('.');
-  		if ( keys.length > 1 ) {
+  		if( keys.length>1 ){
     		object[keys[0]] = object[keys[0]] || {};
     		return setProp( object[keys[0]], keys.slice(1), val );
   		}
@@ -5583,7 +5582,6 @@ if (!Object.entries) {
 			selector.find('.yadcf-null-wrapper :checkbox').prop('checked', false);
 		}
 
-		// updates column which uses data property, with new data
 		function exRefreshColumnFilterWithDataProp(table_arg, col_num, updatedData) {
 			if (table_arg.settings !== undefined) {
 				table_arg = table_arg.settings()[0].oInstance;
@@ -5624,10 +5622,10 @@ if (!Object.entries) {
 			generateTableSelectorJQFriendlyNew: generateTableSelectorJQFriendlyNew,
 			exFilterExternallyTriggered: exFilterExternallyTriggered,
 			exResetFilters: exResetFilters,
-			exRefreshColumnFilterWithDataProp: exRefreshColumnFilterWithDataProp,
 			initSelectPluginCustomTriggers: initSelectPluginCustomTriggers,
 			preventDefaultForEnter: preventDefaultForEnter,
-			generateTableSelectorJQFriendly2: generateTableSelectorJQFriendly2
+			generateTableSelectorJQFriendly2: generateTableSelectorJQFriendly2,
+			exRefreshColumnFilterWithDataProp: exRefreshColumnFilterWithDataProp
 		};
 
 	}());
