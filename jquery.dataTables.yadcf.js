@@ -4450,6 +4450,7 @@ if (!Object.entries) {
 					$(fixedPrefix + "#yadcf-filter-" + table_selector_jq_friendly + "-" + column_number).val("").focus();
 					if (oTable.fnSettings().oFeatures.bServerSide !== true) {
 						oTable.fnFilter('', column_number_filter);
+						addNullFilterCapability(table_selector_jq_friendly, column_number, false);
 					}
 				}
 				if (columnObj.filter_type === "range_number") {
